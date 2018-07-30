@@ -51,7 +51,7 @@ var seqarraystate = [];
 
 //TODO create an array from var width and height
 
-var port = 8080;
+var port = 80;
 
 
 function init(){
@@ -94,8 +94,8 @@ app.get('/GetGridSize', function(req,res){
 
 });
 
-var server = app.listen(8080, function () {
-  console.log('Example app listening on port 8080!')
+var server = app.listen(80, function () {
+  console.log('Example app listening on port 80!')
 });
 
 
