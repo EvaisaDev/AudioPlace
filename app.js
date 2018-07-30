@@ -1,0 +1,214 @@
+var express = require('express');
+var http = require('http');
+var path = require("path");
+var io = require('socket.io');
+var bodyParser = require('body-parser')
+var express = require('express');
+var Metronome = require('timepiece').Metronome;
+var currplayer = 0;
+var appTempo = 280;
+var userID = 0;
+var playerAmount = 0;
+var globalbarType = 0;
+var currtimesec = 10;
+var currtimemin = 0;
+var currtimesecrev = 0;
+var currtimesminrev = 0;
+
+
+
+var app = express();
+var server  = http.createServer(app);
+
+app.use(express.static('public'));
+app.use(bodyParser.urlencoded({ extended: false }))
+app.use(bodyParser.json())
+app.use(function (req, res, next) {
+
+    // Website you wish to allow to connect
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:8080');
+
+    // Request methods you wish to allow
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+
+    // Request headers you wish to allow
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
+
+    // Set to true if you need the website to include cookies in the requests sent
+    // to the API (e.g. in case you use sessions)
+    res.setHeader('Access-Control-Allow-Credentials', false);
+
+    // Pass to next layer of middleware
+    next();
+});
+app.get('/', function (req, res) {
+  res.render('index', {});
+});
+
+var width = 50;
+var height = 13;
+var seqarraystate = [];
+
+//TODO create an array from var width and height
+
+var port = 8080;
+
+
+function init(){
+  for (var i = 0; i < width*height; i++){
+    //seqarraystate[i] = [];
+    seqarraystate[i] = {instrument: 'synth01',
+    color: 'white',
+    activated: 0,
+    serverUID: userID};
+  }
+}
+
+init();
+
+
+function resetGrid(){
+  for (var i = 0; i < width*height; i++){
+    seqarraystate[i].activated = 0;
+  }
+  currtimesec = 10;
+  currtimemin = 0;
+  globalbarType = 0;
+  //sockets.emit('sendSteps', seqarraystate);
+  sockets.emit('resetAll', seqarraystate);
+
+  console.log('reset all');
+
+}
+
+app.get('/GetGridSize', function(req,res){
+  res.setHeader('Content-Type', 'application/json');
+  var obj = {
+    "array": seqarraystate,
+    "width": width,
+    "height": height,
+    "userNumber": userID
+
+  }
+  res.send(obj)
+
+});
+
+var server = app.listen(8080, function () {
+  console.log('Example app listening on port 8080!')
+});
+
+
+var sockets = io(server);
+// configure socket handlers
+sockets.on('connection', function(socket){
+  //Hi this is all the users connected
+
+  sockets.emit('usercount', sockets.engine.clientsCount);
+  //console.log('User num: ', sockets.engine.clientsCount);
+
+
+  playerAmount = playerAmount + 1;
+  //console.log('playerAmount', playerAmount);
+  userID = userID+1;
+  if (userID >= 11){
+    userID = 1;
+  }
+
+  //console.log(userID);
+  socket.send(socket.id);
+
+
+  //console.log('a user connected',socket.id);
+  socket.on('sendStep', function(data){
+    seqarraystate = data.theData;
+    sockets.emit('sendSteps', seqarraystate);
+    userID = sockets.engine.clientsCount;
+    //console.log(seqarraystate);
+  });
+
+
+  //console.log('a user connected',socket.id);
+  socket.on('ClientReset', function(resetfromclient){
+    resetGrid();
+
+    //console.log('userreset');
+  });
+
+  socket.on('disconnect', function(){
+    //Hi somebody dissconencted we have a different count!
+    playerAmount = playerAmount - 1;
+    //console.log('playerAmount', playerAmount);
+
+    sockets.emit('usercount', sockets.engine.clientsCount);
+    //console.log('User num: ', sockets.engine.clientsCount);
+  });
+});
+
+
+
+////////////////tempo///////////
+// By default, a metronome object is set to 60 bpm.
+var metronome = new Metronome();
+// But you could also initialize one at another tempo.
+// It emits a 'tick' event on each beat
+metronome.set(appTempo);
+
+metronome.on('tick', function(){
+  currplayer ++;
+  if (currplayer == 50){
+    currplayer = 0;
+    globalbarType ++;
+    sockets.emit('globalTimetype', globalbarType);
+  }
+  if (globalbarType >= 55){
+    appTempo = 0;
+  }
+
+
+
+
+
+
+
+  sockets.emit('currplayer', currplayer);
+});
+metronome.start();
+
+////////////////tempo///////////
+
+
+
+
+
+////////////////time///////////
+// By default, a metronome object is set to 60 bpm.
+var time = new Metronome();
+// But you could also initialize one at another tempo.
+// It emits a 'tick' event on each beat
+time.set(60);
+
+time.on('tick', function(){
+  currtimesec ++
+
+  if (currtimesec >= 60){
+    currtimemin ++;
+    currtimesec = 0;
+  }
+
+  currtimesecrev = 60 - currtimesec;
+  currtimeminrev = 2 - currtimemin;
+
+  if((currtimesecrev == 1) && (currtimeminrev == 0)){
+    resetGrid();
+  }
+
+  sockets.emit('currTime',currtimesecrev, currtimeminrev);
+
+
+  // console.log('currTime',currtimesecrev, currtimeminrev);
+
+});
+time.start();
+
+////////////////time///////////
